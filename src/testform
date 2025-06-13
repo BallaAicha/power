@@ -1,65 +1,5 @@
-   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <label htmlFor="projectPrefix" className="block text-sm font-medium text-gray-700 mb-2">
-            Préfixe du projet <span className="text-blue-600">*</span>
-          </label>
-          <div className="relative mb-2">
-            <select
-              id="projectPrefix"
-              name="projectPrefix"
-              value={formData.projectName?.split('-').slice(0, 3).join('-') || "unibank-service-"}
-              onChange={(e) => {
-                const prefix = e.target.value;
-                const serviceName = formData.projectName?.replace(/^(unibank-service-|bankup-service-|unibank-bridge-)/, '') || '';
-                onChange({
-                  target: {
-                    name: 'projectName',
-                    value: prefix + serviceName
-                  }
-                } as React.ChangeEvent<HTMLSelectElement>);
-              }}
-              className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white shadow-sm appearance-none"
-            >
-              <option value="unibank-service-">unibank-service-</option>
-              <option value="bankup-service-">bankup-service-</option>
-              <option value="unibank-bridge-">unibank-bridge-</option>
-            </select>
-            <ChevronDown className="absolute right-3 top-3 w-5 h-5 text-gray-400 pointer-events-none" />
-          </div>
-
-          <label htmlFor="serviceName" className="block text-sm font-medium text-gray-700 mb-2">
-            Nom du service <span className="text-blue-600">*</span>
-          </label>
-          <div className="relative">
-            <input
-              id="serviceName"
-              name="serviceName"
-              type="text"
-              value={formData.projectName?.replace(/^(unibank-service-|bankup-service-|unibank-bridge-)/, '') || ''}
-              onChange={(e) => {
-                // Get the current prefix from the formData.projectName
-                // We use the current value in the dropdown (which is derived from formData.projectName)
-                const currentPrefix = formData.projectName?.split('-').slice(0, 3).join('-') || "unibank-service-";
-
-                onChange({
-                  target: {
-                    name: 'projectName',
-                    value: currentPrefix + e.target.value
-                  }
-                } as React.ChangeEvent<HTMLInputElement>);
-              }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 shadow-sm"
-              placeholder="documents"
-              required
-              pattern="^[a-z][a-z0-9-]*$"
-              title="Le nom du service doit commencer par une lettre minuscule et ne contenir que des lettres minuscules, des chiffres et des tirets"
-            />
-            <FileCode className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
-          </div>
-          <p className="mt-1 text-xs text-gray-500">
-            Format: préfixe obligatoire + nom du service (ex: unibank-service-documents)
-          </p>
-        </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      
 
         <div>
           <label htmlFor="groupId" className="block text-sm font-medium text-gray-700 mb-2">
@@ -109,3 +49,68 @@
                 </p>
               </div>
             </div>
+
+
+
+
+<div>
+  <label htmlFor="projectPrefix" className="block text-sm font-medium text-gray-700 mb-2">
+    Préfixe du projet <span className="text-blue-600">*</span>
+  </label>
+  <div className="relative mb-2">
+    <select
+      id="projectPrefix"
+      name="projectPrefix"
+      value={formData.projectName?.split('-').slice(0, 3).join('-') + '-' || "unibank-service-"}
+      onChange={(e) => {
+        const prefix = e.target.value;
+        const serviceName = formData.projectName?.replace(/^(unibank-service-|bankup-service-|unibank-bridge-)/, '') || '';
+        onChange({
+          target: {
+            name: 'projectName',
+            value: prefix + serviceName
+          }
+        } as React.ChangeEvent<HTMLSelectElement>);
+      }}
+      className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 bg-white shadow-sm appearance-none"
+    >
+      <option value="unibank-service-">unibank-service-</option>
+      <option value="bankup-service-">bankup-service-</option>
+      <option value="unibank-bridge-">unibank-bridge-</option>
+    </select>
+    <ChevronDown className="absolute right-3 top-3 w-5 h-5 text-gray-400 pointer-events-none" />
+  </div>
+
+  <label htmlFor="serviceName" className="block text-sm font-medium text-gray-700 mb-2">
+    Nom du service <span className="text-blue-600">*</span>
+  </label>
+  <div className="relative">
+    <input
+      id="serviceName"
+      name="serviceName"
+      type="text"
+      value={formData.projectName?.replace(/^(unibank-service-|bankup-service-|unibank-bridge-)/, '') || ''}
+      onChange={(e) => {
+        // Extraire le préfixe directement du formData.projectName pour assurer la cohérence
+        const prefixMatch = formData.projectName?.match(/^(unibank-service-|bankup-service-|unibank-bridge-)/) || ["unibank-service-"];
+        const prefix = prefixMatch[0];
+
+        onChange({
+          target: {
+            name: 'projectName',
+            value: prefix + e.target.value
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
+      }}
+      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 shadow-sm"
+      placeholder="documents"
+      required
+      pattern="^[a-z][a-z0-9-]*$"
+      title="Le nom du service doit commencer par une lettre minuscule et ne contenir que des lettres minuscules, des chiffres et des tirets"
+    />
+    <FileCode className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+  </div>
+  <p className="mt-1 text-xs text-gray-500">
+    Format: préfixe obligatoire + nom du service (ex: unibank-service-documents)
+  </p>
+</div>
