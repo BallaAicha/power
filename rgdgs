@@ -1,0 +1,55 @@
+  <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 mt-6">
+        <h3 className="font-semibold text-lg text-gray-800 mb-4">
+          Type de Persistence
+        </h3>
+        <div className="space-y-3">
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="persistence-simple"
+              name="persistenceType"
+              value="simple"
+              checked={formData.persistenceType === 'simple'}
+              onChange={(e) => {
+                const syntheticEvent = {
+                  ...e,
+                  target: {
+                    ...e.target,
+                    name: "persistenceType",
+                    value: "simple"
+                  }
+                } as React.ChangeEvent<HTMLInputElement>;
+                onChange(syntheticEvent);
+              }}
+              className="w-5 h-5 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="persistence-simple" className="ml-3 cursor-pointer">
+              unibank-persistence-simple
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="radio"
+              id="persistence-standard"
+              name="persistenceType"
+              value="standard"
+              checked={formData.persistenceType === 'standard'}
+              onChange={(e) => {
+                const syntheticEvent = {
+                  ...e,
+                  target: {
+                    ...e.target,
+                    name: "persistenceType",
+                    value: "standard"
+                  }
+                } as React.ChangeEvent<HTMLInputElement>;
+                onChange(syntheticEvent);
+              }}
+              className="w-5 h-5 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="persistence-standard" className="ml-3 cursor-pointer">
+              unibank-persistence
+            </label>
+          </div>
+        </div>
+      </div>
