@@ -1,4 +1,4 @@
-  <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 mt-6">
+      <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 mt-6">
         <h3 className="font-semibold text-lg text-gray-800 mb-4">
           Type de Persistence
         </h3>
@@ -33,14 +33,14 @@
               id="persistence-standard"
               name="persistenceType"
               value="standard"
-              checked={formData.persistenceType === 'standard'}
+              checked={formData.persistenceType === ''}
               onChange={(e) => {
                 const syntheticEvent = {
                   ...e,
                   target: {
                     ...e.target,
                     name: "persistenceType",
-                    value: "standard"
+                    value: ""
                   }
                 } as React.ChangeEvent<HTMLInputElement>;
                 onChange(syntheticEvent);
@@ -53,3 +53,15 @@
           </div>
         </div>
       </div>
+
+
+
+
+
+
+
+      -----------------
+      persistenceType?: 'simple' | 'standard' | '';
+
+
+       persistenceType: "simple" as 'simple' | 'standard' | '',
