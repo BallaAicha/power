@@ -1,0 +1,192 @@
+package com.docmanager.dto.apis.entities;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Data
+@Table(name = "infrastructure")
+public class Infrastructure {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private UUID id;
+
+    @Column(name = "url_int", nullable = false)
+    private String urlInt;
+
+    @Column(name = "url_uat", nullable = false)
+    private String urlUat;
+
+    @Column(name = "url_oat", nullable = false)
+    private String urlOat;
+
+    @Column(name = "url_prod", nullable = false)
+    private String urlProd;
+
+    @Column(name = "version_dev")
+    private String versionDev;
+
+    @Column(name = "version_hf")
+    private String versionHf;
+
+    @Column(name = "version_ht")
+    private String versionHt;
+
+    @Column(name = "last_update")
+    private LocalDateTime lastUpdate;
+}
+
+
+
+
+
+------------------
+
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="2024-03-20-add-version-fields-to-infrastructure" author="docmanager">
+        <addColumn tableName="infrastructure">
+            <column name="version_dev" type="varchar(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="version_hf" type="varchar(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="version_ht" type="varchar(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="last_update" type="datetime">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+
+
+---------------
+package com.docmanager.dto.apis.entities;
+
+import lombok.Data;
+
+@Data
+public class InfrastructureS3DTO {
+    private Long id;
+    private String name;
+    private String urldev;
+    private String urlhf;
+    private String urlht;
+    private String description;
+}
+
+
+-----------------
+
+package com.docmanager.initialdata;
+
+import com.docmanager.dto.apis.entities.Infrastructure;
+import com.docmanager.dto.apis.entities.InfrastructureS3DTO;
+import com.docmanager.repository.InfrastructureRepository;
+import com.socgen.unibank.platform.springboot.service.initialdata.EntityId;
+import com.socgen.unibank.platform.springboot.service.initialdata.InitialDataWriter;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
+
+import java.io.ByteArrayInputStream;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Component("infrastructure")
+@Slf4j
+@AllArgsConstructor
+public class InitialDataInfrastructureWriter implements InitialDataWriter {
+
+    @Autowired
+    private final InfrastructureRepository infrastructureRepository;
+
+    @Override
+    public void write(ByteArrayInputStream initialDataInputStream, EntityId entityId) {
+        log.info("Starting infrastructure data import from S3");
+        List<InfrastructureS3DTO> s3Data = importFromJson(initialDataInputStream);
+        patchDB(s3Data);
+    }
+
+    private void patchDB(List<InfrastructureS3DTO> infrastructures) {
+        if (CollectionUtils.isEmpty(infrastructures)) {
+            log.warn("No infrastructure data found in S3");
+            return;
+        }
+
+        List<Infrastructure> importedInfrastructures = infrastructures.stream()
+                .filter(Objects::nonNull)
+                .map(this::buildInfrastructure)
+                .collect(Collectors.toList());
+
+        importedInfrastructures.forEach(this::overrideSavedInfrastructure);
+    }
+
+    private Infrastructure buildInfrastructure(InfrastructureS3DTO dto) {
+        Infrastructure infrastructure = new Infrastructure();
+        infrastructure.setUrlInt(dto.getUrldev());
+        infrastructure.setUrlUat(dto.getUrlhf());
+        infrastructure.setUrlOat(dto.getUrlht());
+        infrastructure.setUrlProd(""); // Set to empty as it's not provided in S3
+        infrastructure.setLastUpdate(LocalDateTime.now());
+        return infrastructure;
+    }
+
+    private void overrideSavedInfrastructure(Infrastructure infrastructure) {
+        Optional<Infrastructure> savedInfrastructure = infrastructureRepository.findByUrlInt(infrastructure.getUrlInt());
+
+        if (savedInfrastructure.isPresent()) {
+            Infrastructure existing = savedInfrastructure.get();
+            existing.setUrlInt(infrastructure.getUrlInt());
+            existing.setUrlUat(infrastructure.getUrlUat());
+            existing.setUrlOat(infrastructure.getUrlOat());
+            existing.setLastUpdate(LocalDateTime.now());
+            infrastructureRepository.save(existing);
+            log.info("Updated infrastructure data for URL: {}", infrastructure.getUrlInt());
+        } else {
+            infrastructureRepository.save(infrastructure);
+            log.info("Created new infrastructure entry for URL: {}", infrastructure.getUrlInt());
+        }
+    }
+
+    private List<InfrastructureS3DTO> importFromJson(ByteArrayInputStream inputStream) {
+        try {
+            return JsonUtil.deserializeList(inputStream, InfrastructureS3DTO.class);
+        } catch (Exception e) {
+            log.error("Error deserializing infrastructure data from S3", e);
+            throw new RuntimeException("Failed to import infrastructure data", e);
+        }
+    }
+}
+
+
+------------
+package com.docmanager.repository;
+
+import com.docmanager.dto.apis.entities.Infrastructure;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface InfrastructureRepository extends JpaRepository<Infrastructure, UUID> {
+    Optional<Infrastructure> findByUrlInt(String urlInt);
+}
