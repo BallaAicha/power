@@ -1,94 +1,3 @@
-package com.docmanager.dto.apis.entities;
-
-import jakarta.persistence.*;
-import lombok.Data;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-@Entity
-@Data
-@Table(name = "infrastructure")
-public class Infrastructure {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private UUID id;
-
-    @Column(name = "url_int", nullable = false)
-    private String urlInt;
-
-    @Column(name = "url_uat", nullable = false)
-    private String urlUat;
-
-    @Column(name = "url_oat", nullable = false)
-    private String urlOat;
-
-    @Column(name = "url_prod", nullable = false)
-    private String urlProd;
-
-    @Column(name = "version_dev")
-    private String versionDev;
-
-    @Column(name = "version_hf")
-    private String versionHf;
-
-    @Column(name = "version_ht")
-    private String versionHt;
-
-    @Column(name = "last_update")
-    private LocalDateTime lastUpdate;
-}
-
-
-
-
-
-------------------
-
-<?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog
-        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
-                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
-
-    <changeSet id="2024-03-20-add-version-fields-to-infrastructure" author="docmanager">
-        <addColumn tableName="infrastructure">
-            <column name="version_dev" type="varchar(50)">
-                <constraints nullable="true"/>
-            </column>
-            <column name="version_hf" type="varchar(50)">
-                <constraints nullable="true"/>
-            </column>
-            <column name="version_ht" type="varchar(50)">
-                <constraints nullable="true"/>
-            </column>
-            <column name="last_update" type="datetime">
-                <constraints nullable="true"/>
-            </column>
-        </addColumn>
-    </changeSet>
-
-</databaseChangeLog>
-
-
----------------
-package com.docmanager.dto.apis.entities;
-
-import lombok.Data;
-
-@Data
-public class InfrastructureS3DTO {
-    private Long id;
-    private String name;
-    private String urldev;
-    private String urlhf;
-    private String urlht;
-    private String description;
-}
-
-
------------------
-
 package com.docmanager.initialdata;
 
 import com.docmanager.dto.apis.entities.Infrastructure;
@@ -119,74 +28,76 @@ public class InitialDataInfrastructureWriter implements InitialDataWriter {
 
     @Override
     public void write(ByteArrayInputStream initialDataInputStream, EntityId entityId) {
-        log.info("Starting infrastructure data import from S3");
-        List<InfrastructureS3DTO> s3Data = importFromJson(initialDataInputStream);
-        patchDB(s3Data);
+        log.info("=== Starting infrastructure data import from S3 for entity: {} ===", entityId);
+        try {
+            List<InfrastructureS3DTO> s3Data = importFromJson(initialDataInputStream);
+            log.info("Successfully loaded {} infrastructure records from S3", s3Data.size());
+            patchDB(s3Data);
+            log.info("=== Completed infrastructure data import from S3 ===");
+        } catch (Exception e) {
+            log.error("Failed to import infrastructure data from S3", e);
+            throw new RuntimeException("Failed to import infrastructure data", e);
+        }
     }
 
     private void patchDB(List<InfrastructureS3DTO> infrastructures) {
         if (CollectionUtils.isEmpty(infrastructures)) {
-            log.warn("No infrastructure data found in S3");
+            log.warn("No infrastructure data found in S3 - skipping database update");
             return;
         }
 
+        log.info("Processing {} infrastructure records for database update", infrastructures.size());
         List<Infrastructure> importedInfrastructures = infrastructures.stream()
                 .filter(Objects::nonNull)
                 .map(this::buildInfrastructure)
                 .collect(Collectors.toList());
 
+        log.info("Built {} infrastructure entities for database operations", importedInfrastructures.size());
         importedInfrastructures.forEach(this::overrideSavedInfrastructure);
     }
 
     private Infrastructure buildInfrastructure(InfrastructureS3DTO dto) {
+        log.debug("Building infrastructure entity for service: {}", dto.getName());
         Infrastructure infrastructure = new Infrastructure();
         infrastructure.setUrlInt(dto.getUrldev());
         infrastructure.setUrlUat(dto.getUrlhf());
         infrastructure.setUrlOat(dto.getUrlht());
         infrastructure.setUrlProd(""); // Set to empty as it's not provided in S3
         infrastructure.setLastUpdate(LocalDateTime.now());
+        log.debug("Built infrastructure entity with URLs - INT: {}, UAT: {}, OAT: {}",
+                 dto.getUrldev(), dto.getUrlhf(), dto.getUrlht());
         return infrastructure;
     }
 
     private void overrideSavedInfrastructure(Infrastructure infrastructure) {
+        log.debug("Checking for existing infrastructure with URL: {}", infrastructure.getUrlInt());
         Optional<Infrastructure> savedInfrastructure = infrastructureRepository.findByUrlInt(infrastructure.getUrlInt());
 
         if (savedInfrastructure.isPresent()) {
             Infrastructure existing = savedInfrastructure.get();
+            log.info("Found existing infrastructure record - updating with new data");
             existing.setUrlInt(infrastructure.getUrlInt());
             existing.setUrlUat(infrastructure.getUrlUat());
             existing.setUrlOat(infrastructure.getUrlOat());
             existing.setLastUpdate(LocalDateTime.now());
             infrastructureRepository.save(existing);
-            log.info("Updated infrastructure data for URL: {}", infrastructure.getUrlInt());
+            log.info("Successfully updated infrastructure data for URL: {}", infrastructure.getUrlInt());
         } else {
+            log.info("No existing infrastructure found - creating new record");
             infrastructureRepository.save(infrastructure);
-            log.info("Created new infrastructure entry for URL: {}", infrastructure.getUrlInt());
+            log.info("Successfully created new infrastructure entry for URL: {}", infrastructure.getUrlInt());
         }
     }
 
     private List<InfrastructureS3DTO> importFromJson(ByteArrayInputStream inputStream) {
         try {
-            return JsonUtil.deserializeList(inputStream, InfrastructureS3DTO.class);
+            log.debug("Attempting to deserialize infrastructure data from S3 input stream");
+            List<InfrastructureS3DTO> result = JsonUtil.deserializeList(inputStream, InfrastructureS3DTO.class);
+            log.info("Successfully deserialized {} infrastructure records from S3", result.size());
+            return result;
         } catch (Exception e) {
-            log.error("Error deserializing infrastructure data from S3", e);
+            log.error("Error deserializing infrastructure data from S3: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to import infrastructure data", e);
         }
     }
-}
-
-
-------------
-package com.docmanager.repository;
-
-import com.docmanager.dto.apis.entities.Infrastructure;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-import java.util.UUID;
-
-@Repository
-public interface InfrastructureRepository extends JpaRepository<Infrastructure, UUID> {
-    Optional<Infrastructure> findByUrlInt(String urlInt);
 }
