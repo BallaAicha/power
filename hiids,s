@@ -1,134 +1,203 @@
-@Entity
-@Data
-@Table(name = "infrastructure")
-public class Infrastructure {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private UUID id;
+package com.docmanager.service;
 
-    @Column(nullable = false)
-    private String name;  // Ajout du champ name
+import com.docmanager.dto.apis.entities.Infrastructure;
+import com.docmanager.repository.InfrastructureRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-    @Column(name = "url_int", nullable = false)
-    private String urlInt;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
-    @Column(name = "url_uat", nullable = false)
-    private String urlUat;
-
-    @Column(name = "url_oat", nullable = false)
-    private String urlOat;
-
-    @Column(name = "url_prod", nullable = false)
-    private String urlProd;
-
-    @Column(name = "version_dev")
-    private String versionDev;
-
-    @Column(name = "version_hf")
-    private String versionHf;
-
-    @Column(name = "version_ht")
-    private String versionHt;
-
-    @Column(name = "last_update")
-    private LocalDateTime lastUpdate;
-}
-
-
-
-
-
-----------------
-@Repository
-public interface InfrastructureRepository extends JpaRepository<Infrastructure, UUID> {
-    Optional<Infrastructure> findByUrlInt(String urlInt);
-    Optional<Infrastructure> findByName(String name);  // Nouvelle méthode
-}
-
------------
-private Infrastructure buildInfrastructure(InfrastructureS3DTO dto) {
-    log.info("Building infrastructure entity for service: {}", dto.getName());
-    Infrastructure infrastructure = new Infrastructure();
-    infrastructure.setName(dto.getName());  // Ajout du nom
-    infrastructure.setUrlInt(dto.getUrldev());
-    infrastructure.setUrlUat(dto.getUrlhf());
-    infrastructure.setUrlOat(dto.getUrlht());
-    infrastructure.setUrlProd("");
-    infrastructure.setLastUpdate(LocalDateTime.now());
-    log.info("Built infrastructure entity with name: {} and URLs - INT: {}, UAT: {}, OAT: {}",
-             dto.getName(), dto.getUrldev(), dto.getUrlhf(), dto.getUrlht());
-    return infrastructure;
-}
-
-
------------
-@Component
+@Service
 @RequiredArgsConstructor
 @Slf4j
-public class APIServiceMapper {
-
-    private final ServiceVersionService serviceVersionService;
+public class ServiceVersionService implements GetInfoServices {
+    private final RestTemplate restTemplate;
     private final InfrastructureRepository infrastructureRepository;
 
-    public void updateEntityFromRequest(APIService entity, CreateAPIServiceRequest request) {
-        entity.setName(request.getName());
-        entity.setTrigramme(request.getTrigramme());
-        entity.setDescription(request.getDescription());
-        entity.setDatabaseSchema(request.getDatabaseSchema());
+    public Infrastructure fetchVersions(Infrastructure infrastructure) {
+        log.info("Fetching versions for infrastructure with URL: {}", infrastructure.getUrlInt());
 
-        // Recherche de l'infrastructure par nom
-        log.info("Looking for infrastructure with name: {}", request.getName());
-        Optional<Infrastructure> existingInfra = infrastructureRepository.findByName(request.getName());
+        try {
+            // Check if infrastructure already exists
+            Optional<Infrastructure> existingInfra = infrastructureRepository.findByUrlInt(infrastructure.getUrlInt());
+            Infrastructure infraToUpdate = existingInfra.orElse(infrastructure);
 
-        if (existingInfra.isPresent()) {
-            log.info("Found existing infrastructure for service: {}", request.getName());
-            entity.setInfrastructure(existingInfra.get());
-        } else {
-            log.warn("No infrastructure found for service: {}. Creating new one.", request.getName());
-            // Créer une nouvelle infrastructure si nécessaire
-            Infrastructure newInfra = new Infrastructure();
-            newInfra.setName(request.getName());
-            newInfra.setUrlInt("https://int-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
-            newInfra.setUrlUat("https://uat-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
-            newInfra.setUrlOat("https://oat-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
-            newInfra.setUrlProd("https://" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
-            entity.setInfrastructure(serviceVersionService.fetchVersions(newInfra));
-        }
+            // Update URLs if they have changed
+            infraToUpdate.setUrlInt(infrastructure.getUrlInt());
+            infraToUpdate.setUrlUat(infrastructure.getUrlUat());
+            infraToUpdate.setUrlOat(infrastructure.getUrlOat());
+            infraToUpdate.setUrlProd(infrastructure.getUrlProd());
 
-        // ... reste du code inchangé ...
-    }
-
-    public APIServiceDTO toDTO(APIService entity) {
-        log.info("Starting toDTO conversion for service: {}", entity.getName());
-        APIServiceDTO dto = new APIServiceDTO();
-
-        // ... autres mappings ...
-
-        // Mappage de l'infrastructure avec vérification par nom
-        if (entity.getInfrastructure() != null) {
-            Infrastructure infra = entity.getInfrastructure();
-            // Vérifier si l'infrastructure existe toujours dans le repository
-            Optional<Infrastructure> existingInfra = infrastructureRepository.findByName(entity.getName());
-            if (existingInfra.isPresent()) {
-                infra = existingInfra.get();
-                log.info("Found infrastructure in repository for service: {}", entity.getName());
+            // Fetch DEV version
+            if (infraToUpdate.getUrlInt() != null) {
+                String versionDev = fetchVersion(infraToUpdate.getUrlInt());
+                infraToUpdate.setVersionDev(versionDev);
             }
 
-            InfrastructureDTO infraDTO = new InfrastructureDTO(
-                infra.getUrlInt(),
-                infra.getUrlUat(),
-                infra.getUrlOat(),
-                infra.getUrlProd()
-            );
-            dto.setInfrastructure(infraDTO);
-        } else {
-            log.warn("Infrastructure is null for service: {}", entity.getName());
+            // Fetch UAT version
+            if (infraToUpdate.getUrlUat() != null) {
+                String versionHf = fetchVersion(infraToUpdate.getUrlUat());
+                infraToUpdate.setVersionHf(versionHf);
+            }
+
+            // Fetch OAT version
+            if (infraToUpdate.getUrlOat() != null) {
+                String versionHt = fetchVersion(infraToUpdate.getUrlOat());
+                infraToUpdate.setVersionHt(versionHt);
+            }
+
+            infraToUpdate.setLastUpdate(LocalDateTime.now());
+
+            // Save the infrastructure
+            Infrastructure savedInfra = infrastructureRepository.save(infraToUpdate);
+            log.info("Successfully saved infrastructure with versions: {}", savedInfra);
+
+            return savedInfra;
+        } catch (Exception e) {
+            log.error("Error fetching versions for infrastructure: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to fetch service versions", e);
+        }
+    }
+
+    private String fetchVersion(String serviceUrl) {
+        if (serviceUrl == null || serviceUrl.isEmpty()) {
+            log.warn("Service URL is null or empty, cannot fetch version");
+            return "-";
         }
 
-        // ... reste du code ...
-        return dto;
+        try {
+            Map<String, Object> response = restTemplate.getForObject(serviceUrl, Map.class);
+            if (response != null && response.containsKey("version")) {
+                Object version = response.get("version");
+                if (version instanceof String && !((String) version).isBlank()) {
+                    log.info("Found version {} for URL: {}", version, serviceUrl);
+                    return (String) version;
+                }
+            }
+            log.warn("No valid version found for URL: {}", serviceUrl);
+            return "-";
+        } catch (Exception e) {
+            log.error("Error fetching version from {}: {}", serviceUrl, e.getMessage());
+            return "-";
+        }
+    }
+
+    public List<ServiceInfo> handle(GetServiceInfoByEnv request, RequestContext context) {
+        if (request.getEnvironment() == null) {
+            log.warn("L'environnement dans la requête est null.");
+            throw new IllegalArgumentException("L'environnement ne peut pas être null.");
+        }
+
+        // Normaliser l'environnement en majuscules
+        String env = request.getEnvironment().toString().toUpperCase();
+        log.info("Handling GetServiceInfoByEnv request for environment: {}", env);
+
+        // Vérifier si l'environnement est valide
+        if (!isValidEnvironment(env)) {
+            log.error("Environnement invalide: {}. Les environnements valides sont: DEV, UAT, OAT", env);
+            throw new IllegalArgumentException("Environnement invalide. Les environnements valides sont: DEV, UAT, OAT");
+        }
+
+        List<ServiceInfo> result = new ArrayList<>();
+        List<Infrastructure> infrastructures = infrastructureRepository.findAll();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+        for (Infrastructure infra : infrastructures) {
+            try {
+                ServiceInfo serviceInfo = new ServiceInfo();
+                serviceInfo.setServiceName(infra.getName());
+
+                // Récupérer la version en fonction de l'environnement
+                String version;
+                String url;
+                switch (env) {
+                    case "DEV" -> {
+                        url = infra.getUrlInt();
+                        version = fetchVersionFromUrl(url);
+                        infra.setVersionDev(version);
+                    }
+                    case "UAT" -> {
+                        url = infra.getUrlUat();
+                        version = fetchVersionFromUrl(url);
+                        infra.setVersionHf(version);
+                    }
+                    case "OAT" -> {
+                        url = infra.getUrlOat();
+                        version = fetchVersionFromUrl(url);
+                        infra.setVersionHt(version);
+                    }
+                    default -> {
+                        log.error("Environnement non géré: {}", env);
+                        throw new IllegalStateException("Environnement non géré: " + env);
+                    }
+                }
+
+                // Mettre à jour le timestamp
+                infra.setLastUpdate(LocalDateTime.now());
+                infrastructureRepository.save(infra);
+
+                // Remplir le ServiceInfo avec toutes les versions
+                serviceInfo.setVersionDev(infra.getVersionDev());
+                serviceInfo.setVersionHf(infra.getVersionHf());
+                serviceInfo.setVersionHt(infra.getVersionHt());
+                serviceInfo.setLastUpdate(infra.getLastUpdate().format(formatter));
+
+                result.add(serviceInfo);
+                log.info("Service info retrieved for {} in environment {}: version={}",
+                    infra.getName(), env, version);
+
+            } catch (Exception e) {
+                log.error("Error processing infrastructure {}: {}", infra.getName(), e.getMessage());
+                // Ajouter un ServiceInfo avec des valeurs par défaut en cas d'erreur
+                ServiceInfo errorInfo = new ServiceInfo();
+                errorInfo.setServiceName(infra.getName());
+                errorInfo.setVersionDev("-");
+                errorInfo.setVersionHf("-");
+                errorInfo.setVersionHt("-");
+                errorInfo.setLastUpdate(LocalDateTime.now().format(formatter));
+                result.add(errorInfo);
+            }
+        }
+
+        return result;
+    }
+
+    private String fetchVersionFromUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            log.warn("URL is null or empty");
+            return "-";
+        }
+
+        try {
+            // Faire la requête GET vers l'URL
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            if (response != null && response.containsKey("version")) {
+                Object version = response.get("version");
+                if (version instanceof String && !((String) version).isBlank()) {
+                    log.info("Found version {} for URL: {}", version, url);
+                    return (String) version;
+                }
+            }
+
+            log.warn("No valid version found in response for URL: {}", url);
+            return "-";
+
+        } catch (Exception e) {
+            log.error("Error fetching version from {}: {}", url, e.getMessage());
+            return "-";
+        }
+    }
+
+    // Méthode utilitaire pour valider l'environnement
+    private boolean isValidEnvironment(String env) {
+        return env != null && (env.equals("DEV") || env.equals("UAT") || env.equals("OAT"));
     }
 }
-
--------------
-ALTER TABLE infrastructure ADD COLUMN name VARCHAR(255) NOT NULL;
