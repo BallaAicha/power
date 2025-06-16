@@ -266,3 +266,165 @@ public class RestTemplateConfig {
         return new RestTemplate();
     }
 }
+
+
+
+
+
+
+public APIServiceDTO toDTO(APIService entity) {
+    APIServiceDTO dto = new APIServiceDTO();
+
+    // Mappage des champs de base
+    dto.setId(entity.getId());
+    dto.setName(entity.getName());
+    dto.setTrigramme(entity.getTrigramme());
+    dto.setDescription(entity.getDescription());
+    dto.setDatabaseSchema(entity.getDatabaseSchema());
+
+    // Mappage des nouveaux attributs
+    dto.setBridgeCommunication(entity.isBridgeCommunication());
+    dto.setCriticality(entity.getCriticality());
+    dto.setPoCoeDev(entity.getPoCoedev());
+    dto.setTechlead(entity.getTechlead());
+    dto.setJava17Migrated(entity.isJava17Migrated());
+    dto.setSonarized(entity.isSonarized());
+    dto.setSonarReportUrl(entity.getSonarReportUrl());
+    dto.setVersion(entity.getVersion());
+    dto.setJfrogMigrated(entity.isJfrogMigrated());
+    dto.setGithubUrl(entity.getGithubUrl());
+    dto.setDevelopmentStatus(entity.getDevelopmentStatus());
+    dto.setSpringVersion(entity.getSpringVersion());
+    dto.setServicesCountByTrigramme(entity.getServicesCountByTrigramme());
+    dto.setBridgeName(entity.getBridgeName());
+    dto.setDocumentedBy(entity.getDocumentedBy());
+    dto.setDocumented(entity.isDocumented());
+    dto.setPublishedOnSkies(entity.isPublishedOnSkies());
+    dto.setDeployedOnDev(entity.isDeployedOnDev());
+    dto.setMigrationTestedOnDev(entity.isMigrationTestedOnDev());
+
+    // Mappage de l'infrastructure
+    if (entity.getInfrastructure() != null) {
+        Infrastructure infra = entity.getInfrastructure();
+        InfrastructureDTO infraDTO = new InfrastructureDTO(
+            infra.getUrlInt(),
+            infra.getUrlUat(),
+            infra.getUrlOat(),
+            infra.getUrlProd()
+        );
+        dto.setInfrastructure(infraDTO);
+
+        log.info("Voir infra: {}", entity.getInfrastructure());
+    }
+
+    // Mappage des data sources
+    if (entity.getDataSources() != null) {
+        DataSources ds = entity.getDataSources();
+        DataSourcesDTO dsDTO = new DataSourcesDTO(
+            ds.isRabbitMQ(),
+            ds.isCommonDB(),
+            ds.isDedicatedDB(),
+            ds.isS3()
+        );
+        dto.setDataSources(dsDTO);
+    }
+
+    // Mappage des listes
+    dto.setClientConsumers(entity.getClientConsumers().stream()
+            .map(ClientConsumer::getName)
+            .collect(Collectors.toList()));
+
+    dto.setConsumes(entity.getConsumes().stream()
+            .map(Consumes::getName)
+            .collect(Collectors.toList()));
+
+    dto.setConsumedBy(entity.getConsumedBy().stream()
+            .map(ConsumedBy::getName)
+            .collect(Collectors.toList()));
+
+    dto.setEndpoints(entity.getEndpoints().stream()
+            .map(this::toEndpointDTO)
+            .collect(Collectors.toList()));
+
+    return dto;
+}
+
+
+
+
+
+
+
+-------------------------
+
+
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class APIServiceMapper {
+
+    private final ServiceVersionService serviceVersionService;
+    private final InfrastructureRepository infrastructureRepository;  // Ajout du repository
+
+    public APIService fromRequest(CreateAPIServiceRequest request) {
+        APIService service = new APIService();
+        updateEntityFromRequest(service, request);
+        return service;
+    }
+
+    public void updateEntityFromRequest(APIService entity, CreateAPIServiceRequest request) {
+        entity.setName(request.getName());
+        entity.setTrigramme(request.getTrigramme());
+        entity.setDescription(request.getDescription());
+        entity.setDatabaseSchema(request.getDatabaseSchema());
+
+        // Convert and fetch versions for infrastructure
+        if (request.getInfrastructure() != null) {
+            Infrastructure infra = toInfrastructure(request.getInfrastructure());
+            // Vérifier si l'infrastructure existe déjà
+            Optional<Infrastructure> existingInfra = infrastructureRepository.findByUrlInt(infra.getUrlInt());
+            if (existingInfra.isPresent()) {
+                log.info("Found existing infrastructure for URL: {}", infra.getUrlInt());
+                entity.setInfrastructure(existingInfra.get());
+            } else {
+                log.info("Creating new infrastructure for URL: {}", infra.getUrlInt());
+                entity.setInfrastructure(serviceVersionService.fetchVersions(infra));
+            }
+        }
+
+        // ... reste du code inchangé ...
+    }
+
+    public APIServiceDTO toDTO(APIService entity) {
+        log.info("Starting toDTO conversion for service: {}", entity.getName());
+        APIServiceDTO dto = new APIServiceDTO();
+
+        // ... autres mappings ...
+
+        // Mappage de l'infrastructure avec vérification dans le repository
+        if (entity.getInfrastructure() != null) {
+            Infrastructure infra = entity.getInfrastructure();
+            // Vérifier si l'infrastructure existe toujours dans le repository
+            Optional<Infrastructure> existingInfra = infrastructureRepository.findByUrlInt(infra.getUrlInt());
+            if (existingInfra.isPresent()) {
+                infra = existingInfra.get();
+                log.info("Found infrastructure in repository: {}", infra);
+            }
+
+            InfrastructureDTO infraDTO = new InfrastructureDTO(
+                infra.getUrlInt(),
+                infra.getUrlUat(),
+                infra.getUrlOat(),
+                infra.getUrlProd()
+            );
+            dto.setInfrastructure(infraDTO);
+        } else {
+            log.warn("Infrastructure is null for service: {}", entity.getName());
+        }
+
+        // ... reste du code ...
+        return dto;
+    }
+
+    // ... autres méthodes ...
+}
