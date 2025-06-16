@@ -1,0 +1,134 @@
+@Entity
+@Data
+@Table(name = "infrastructure")
+public class Infrastructure {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private UUID id;
+
+    @Column(nullable = false)
+    private String name;  // Ajout du champ name
+
+    @Column(name = "url_int", nullable = false)
+    private String urlInt;
+
+    @Column(name = "url_uat", nullable = false)
+    private String urlUat;
+
+    @Column(name = "url_oat", nullable = false)
+    private String urlOat;
+
+    @Column(name = "url_prod", nullable = false)
+    private String urlProd;
+
+    @Column(name = "version_dev")
+    private String versionDev;
+
+    @Column(name = "version_hf")
+    private String versionHf;
+
+    @Column(name = "version_ht")
+    private String versionHt;
+
+    @Column(name = "last_update")
+    private LocalDateTime lastUpdate;
+}
+
+
+
+
+
+----------------
+@Repository
+public interface InfrastructureRepository extends JpaRepository<Infrastructure, UUID> {
+    Optional<Infrastructure> findByUrlInt(String urlInt);
+    Optional<Infrastructure> findByName(String name);  // Nouvelle méthode
+}
+
+-----------
+private Infrastructure buildInfrastructure(InfrastructureS3DTO dto) {
+    log.info("Building infrastructure entity for service: {}", dto.getName());
+    Infrastructure infrastructure = new Infrastructure();
+    infrastructure.setName(dto.getName());  // Ajout du nom
+    infrastructure.setUrlInt(dto.getUrldev());
+    infrastructure.setUrlUat(dto.getUrlhf());
+    infrastructure.setUrlOat(dto.getUrlht());
+    infrastructure.setUrlProd("");
+    infrastructure.setLastUpdate(LocalDateTime.now());
+    log.info("Built infrastructure entity with name: {} and URLs - INT: {}, UAT: {}, OAT: {}",
+             dto.getName(), dto.getUrldev(), dto.getUrlhf(), dto.getUrlht());
+    return infrastructure;
+}
+
+
+-----------
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class APIServiceMapper {
+
+    private final ServiceVersionService serviceVersionService;
+    private final InfrastructureRepository infrastructureRepository;
+
+    public void updateEntityFromRequest(APIService entity, CreateAPIServiceRequest request) {
+        entity.setName(request.getName());
+        entity.setTrigramme(request.getTrigramme());
+        entity.setDescription(request.getDescription());
+        entity.setDatabaseSchema(request.getDatabaseSchema());
+
+        // Recherche de l'infrastructure par nom
+        log.info("Looking for infrastructure with name: {}", request.getName());
+        Optional<Infrastructure> existingInfra = infrastructureRepository.findByName(request.getName());
+
+        if (existingInfra.isPresent()) {
+            log.info("Found existing infrastructure for service: {}", request.getName());
+            entity.setInfrastructure(existingInfra.get());
+        } else {
+            log.warn("No infrastructure found for service: {}. Creating new one.", request.getName());
+            // Créer une nouvelle infrastructure si nécessaire
+            Infrastructure newInfra = new Infrastructure();
+            newInfra.setName(request.getName());
+            newInfra.setUrlInt("https://int-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
+            newInfra.setUrlUat("https://uat-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
+            newInfra.setUrlOat("https://oat-" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
+            newInfra.setUrlProd("https://" + request.getName().toLowerCase().replace(" ", "-") + ".bankingsolutions.com");
+            entity.setInfrastructure(serviceVersionService.fetchVersions(newInfra));
+        }
+
+        // ... reste du code inchangé ...
+    }
+
+    public APIServiceDTO toDTO(APIService entity) {
+        log.info("Starting toDTO conversion for service: {}", entity.getName());
+        APIServiceDTO dto = new APIServiceDTO();
+
+        // ... autres mappings ...
+
+        // Mappage de l'infrastructure avec vérification par nom
+        if (entity.getInfrastructure() != null) {
+            Infrastructure infra = entity.getInfrastructure();
+            // Vérifier si l'infrastructure existe toujours dans le repository
+            Optional<Infrastructure> existingInfra = infrastructureRepository.findByName(entity.getName());
+            if (existingInfra.isPresent()) {
+                infra = existingInfra.get();
+                log.info("Found infrastructure in repository for service: {}", entity.getName());
+            }
+
+            InfrastructureDTO infraDTO = new InfrastructureDTO(
+                infra.getUrlInt(),
+                infra.getUrlUat(),
+                infra.getUrlOat(),
+                infra.getUrlProd()
+            );
+            dto.setInfrastructure(infraDTO);
+        } else {
+            log.warn("Infrastructure is null for service: {}", entity.getName());
+        }
+
+        // ... reste du code ...
+        return dto;
+    }
+}
+
+-------------
+ALTER TABLE infrastructure ADD COLUMN name VARCHAR(255) NOT NULL;
