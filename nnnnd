@@ -6,13 +6,13 @@ const [currentEnvironmentIndex, setCurrentEnvironmentIndex] = useState(0);
 
 // Définition des environnements et leurs versions
 const environments = [
-    { name: 'Dev', key: 'urlDev' },
-    { name: 'HF', key: 'urlHf' },
-    { name: 'HT', key: 'urlHt' },
-    { name: 'INT', key: 'urlInt' },
-    { name: 'UAT', key: 'urlUat' },
-    { name: 'OAT', key: 'urlOat' },
-    { name: 'PROD', key: 'urlProd' }
+    { name: 'Dev', key: 'urlDev', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { name: 'HF', key: 'urlHf', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { name: 'HT', key: 'urlHt', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { name: 'INT', key: 'urlInt', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+    { name: 'UAT', key: 'urlUat', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    { name: 'OAT', key: 'urlOat', color: 'bg-pink-50 text-pink-700 border-pink-200' },
+    { name: 'PROD', key: 'urlProd', color: 'bg-red-50 text-red-700 border-red-200' }
 ];
 
 // Rotation des environnements toutes les 10 secondes
@@ -31,12 +31,34 @@ const getCurrentVersion = (service: APIService) => {
     const currentEnv = environments[currentEnvironmentIndex];
     const version = service.infrastructure?.[currentEnv.key as keyof typeof service.infrastructure];
 
+    // Si c'est une URL, on extrait la version ou on utilise un indicateur
     if (version && version !== '') {
-        return { environment: currentEnv.name, version };
+        if (version.startsWith('http')) {
+            // C'est une URL, on utilise un indicateur d'environnement
+            return {
+                environment: currentEnv.name,
+                version: 'En ligne',
+                color: currentEnv.color,
+                isUrl: true
+            };
+        } else {
+            // C'est une version directe
+            return {
+                environment: currentEnv.name,
+                version,
+                color: currentEnv.color,
+                isUrl: false
+            };
+        }
     }
 
     // Fallback vers la version générale si pas de version spécifique
-    return { environment: 'Version', version: service.version || '1.0' };
+    return {
+        environment: currentEnv.name,
+        version: 'Non déployé',
+        color: 'bg-gray-50 text-gray-700 border-gray-200',
+        isUrl: false
+    };
 };
 
 // 3. DANS LA BOUCLE MAP (après const criticalityData = getCriticalityData(service.criticality);)
@@ -48,22 +70,7 @@ const currentVersion = getCurrentVersion(service);
     initial={{ opacity: 0, scale: 0.8 }}
     animate={{ opacity: 1, scale: 1 }}
     transition={{ duration: 0.3, ease: "easeOut" }}
-    className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200 shadow-sm"
+    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border shadow-sm ${currentVersion.color}`}
 >
-    {currentVersion.environment} - v{currentVersion.version}
+    {currentVersion.environment} - {currentVersion.isUrl ? currentVersion.version : `v${currentVersion.version}`}
 </motion.span>
-
-
-
-
---------
-// API Types
-export interface Infrastructure {
-  urlInt: string;
-  urlUat: string;
-  urlOat: string;
-  urlProd: string;
-  urlDev: string;
-  urlHf: string;
-  urlHt: string;
-}
