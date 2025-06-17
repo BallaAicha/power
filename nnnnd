@@ -6,13 +6,13 @@ const [currentEnvironmentIndex, setCurrentEnvironmentIndex] = useState(0);
 
 // Définition des environnements et leurs versions
 const environments = [
-    { name: 'Dev', key: 'urldev' },
-    { name: 'HF', key: 'urlhf' },
-    { name: 'HT', key: 'urlht' },
-    { name: 'INT', key: 'url_int' },
-    { name: 'UAT', key: 'url_uat' },
-    { name: 'OAT', key: 'url_oat' },
-    { name: 'PROD', key: 'url_prod' }
+    { name: 'Dev', key: 'urlDev' },
+    { name: 'HF', key: 'urlHf' },
+    { name: 'HT', key: 'urlHt' },
+    { name: 'INT', key: 'urlInt' },
+    { name: 'UAT', key: 'urlUat' },
+    { name: 'OAT', key: 'urlOat' },
+    { name: 'PROD', key: 'urlProd' }
 ];
 
 // Rotation des environnements toutes les 10 secondes
@@ -31,7 +31,7 @@ const getCurrentVersion = (service: APIService) => {
     const currentEnv = environments[currentEnvironmentIndex];
     const version = service.infrastructure?.[currentEnv.key as keyof typeof service.infrastructure];
 
-    if (version) {
+    if (version && version !== '') {
         return { environment: currentEnv.name, version };
     }
 
@@ -52,3 +52,18 @@ const currentVersion = getCurrentVersion(service);
 >
     {currentVersion.environment} - v{currentVersion.version}
 </motion.span>
+
+
+
+
+--------
+// API Types
+export interface Infrastructure {
+  urlInt: string;
+  urlUat: string;
+  urlOat: string;
+  urlProd: string;
+  urlDev: string;
+  urlHf: string;
+  urlHt: string;
+}
