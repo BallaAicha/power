@@ -1,0 +1,54 @@
+// 1. IMPORTS À AJOUTER (ligne 1)
+import React, { useState, useEffect } from 'react';
+
+// 2. ÉTAT ET CONFIGURATION (après la déclaration du composant, avant containerVariants)
+const [currentEnvironmentIndex, setCurrentEnvironmentIndex] = useState(0);
+
+// Définition des environnements et leurs versions
+const environments = [
+    { name: 'Dev', key: 'urldev' },
+    { name: 'HF', key: 'urlhf' },
+    { name: 'HT', key: 'urlht' },
+    { name: 'INT', key: 'url_int' },
+    { name: 'UAT', key: 'url_uat' },
+    { name: 'OAT', key: 'url_oat' },
+    { name: 'PROD', key: 'url_prod' }
+];
+
+// Rotation des environnements toutes les 10 secondes
+useEffect(() => {
+    const interval = setInterval(() => {
+        setCurrentEnvironmentIndex((prevIndex) =>
+            (prevIndex + 1) % environments.length
+        );
+    }, 10000);
+
+    return () => clearInterval(interval);
+}, [environments.length]);
+
+// Fonction pour obtenir la version actuelle selon l'environnement
+const getCurrentVersion = (service: APIService) => {
+    const currentEnv = environments[currentEnvironmentIndex];
+    const version = service.infrastructure?.[currentEnv.key as keyof typeof service.infrastructure];
+
+    if (version) {
+        return { environment: currentEnv.name, version };
+    }
+
+    // Fallback vers la version générale si pas de version spécifique
+    return { environment: 'Version', version: service.version || '1.0' };
+};
+
+// 3. DANS LA BOUCLE MAP (après const criticalityData = getCriticalityData(service.criticality);)
+const currentVersion = getCurrentVersion(service);
+
+// 4. REMPLACER LE BADGE DE VERSION (remplacer la span existante)
+<motion.span
+    key={`${service.id}-${currentEnvironmentIndex}`}
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.3, ease: "easeOut" }}
+    className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200 shadow-sm"
+>
+    {currentVersion.environment} - v{currentVersion.version}
+</motion.span>
