@@ -1,362 +1,144 @@
-// TechNewsModule.java
-
-// --- ENTITE ---
-package com.docmanager.dto.apis.entities;
-
-import jakarta.persistence.*;
-import lombok.Data;
-import java.util.UUID;
-
-@Entity
-@Data
-@Table(name = "tech_news")
-public class TechNews {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private UUID id;
-
-    @Column(nullable = false)
-    private String title;
-
-    @Column(nullable = false)
-    private String value;
-
-    @Column(nullable = false)
-    private boolean enabled = true;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id")
-    private APIService service;
-}
-
-// --- AJOUT DANS APIService ---
-@OneToMany(mappedBy = "service", cascade = CascadeType.ALL, orphanRemoval = true)
-private List<TechNews> techNews;
-
-// --- REPOSITORY ---
-package com.docmanager.dto.apis.repositories;
-
-import com.docmanager.dto.apis.entities.TechNews;
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List;
-import java.util.UUID;
-
-public interface TechNewsRepository extends JpaRepository<TechNews, UUID> {
-    List<TechNews> findByServiceId(UUID serviceId);
-}
-
-// --- DTOs ---
-package com.docmanager.dto.apis.usecases.technews;
-
-import lombok.Data;
-import java.util.UUID;
-
-@Data
-public class CreateTechNewsRequest {
-    private UUID serviceId;
-    private String title;
-    private String value;
-}
-
-@Data
-public class ToggleTechNewsRequest {
-    private UUID techNewsId;
-    private boolean enabled;
-}
-
-// --- USECASES ---
-package com.docmanager.dto.apis.usecases.technews;
-
-import com.docmanager.dto.apis.entities.TechNews;
-import com.docmanager.dto.apis.usecases.Command;
-import com.docmanager.dto.apis.usecases.RequestContext;
-
-public interface CreateTechNews extends Command {
-    TechNews handle(CreateTechNewsRequest input, RequestContext context);
-}
-
-public interface ToggleTechNews extends Command {
-    TechNews handle(ToggleTechNewsRequest input, RequestContext context);
-}
-
-// --- IMPLEMENTATIONS ---
-package com.docmanager.dto.apis.usecases.technews;
-
-import com.docmanager.dto.apis.entities.APIService;
-import com.docmanager.dto.apis.entities.TechNews;
-import com.docmanager.dto.apis.repositories.APIServiceRepository;
-import com.docmanager.dto.apis.repositories.TechNewsRepository;
-import com.docmanager.dto.apis.usecases.RequestContext;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-@Service
-public class CreateTechNewsImpl implements CreateTechNews {
-    private final APIServiceRepository apiServiceRepository;
-    private final TechNewsRepository techNewsRepository;
-
-    public CreateTechNewsImpl(APIServiceRepository apiServiceRepository, TechNewsRepository techNewsRepository) {
-        this.apiServiceRepository = apiServiceRepository;
-        this.techNewsRepository = techNewsRepository;
-    }
-
-    @Override
-    @Transactional
-    public TechNews handle(CreateTechNewsRequest input, RequestContext context) {
-        APIService service = apiServiceRepository.findById(input.getServiceId())
-            .orElseThrow(() -> new IllegalArgumentException("Service not found"));
-        TechNews news = new TechNews();
-        news.setTitle(input.getTitle());
-        news.setValue(input.getValue());
-        news.setEnabled(true);
-        news.setService(service);
-        return techNewsRepository.save(news);
-    }
-}
-
-@Service
-public class ToggleTechNewsImpl implements ToggleTechNews {
-    private final TechNewsRepository techNewsRepository;
-
-    public ToggleTechNewsImpl(TechNewsRepository techNewsRepository) {
-        this.techNewsRepository = techNewsRepository;
-    }
-
-    @Override
-    @Transactional
-    public TechNews handle(ToggleTechNewsRequest input, RequestContext context) {
-        TechNews news = techNewsRepository.findById(input.getTechNewsId())
-            .orElseThrow(() -> new IllegalArgumentException("TechNews not found"));
-        news.setEnabled(input.isEnabled());
-        return techNewsRepository.save(news);
-    }
-}
-
-// --- CONTROLLER (exemple REST) ---
-package com.docmanager.api;
-
-import com.docmanager.dto.apis.entities.TechNews;
-import com.docmanager.dto.apis.repositories.TechNewsRepository;
-import com.docmanager.dto.apis.usecases.technews.CreateTechNewsRequest;
-import com.docmanager.dto.apis.usecases.technews.ToggleTechNewsRequest;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
-
-@RestController
-@RequestMapping("/api/technews")
-public class TechNewsController {
-    private final TechNewsRepository techNewsRepository;
-
-    public TechNewsController(TechNewsRepository techNewsRepository) {
-        this.techNewsRepository = techNewsRepository;
-    }
-
-    @PostMapping
-    public TechNews create(@RequestBody CreateTechNewsRequest req) {
-        // Appeler le usecase CreateTechNews ici
-        // (exemple simplifié, à adapter selon ton architecture)
-        // return createTechNews.handle(req, ...);
-        return null;
-    }
-
-    @PostMapping("/{id}/toggle")
-    public TechNews toggle(@PathVariable UUID id, @RequestBody ToggleTechNewsRequest req) {
-        // Appeler le usecase ToggleTechNews ici
-        // (exemple simplifié, à adapter selon ton architecture)
-        // return toggleTechNews.handle(req, ...);
-        return null;
-    }
-
-    @GetMapping("/service/{serviceId}")
-    public List<TechNews> getByService(@PathVariable UUID serviceId) {
-        return techNewsRepository.findByServiceId(serviceId);
-    }
-}
-
-
-
-
-
-
---------------------
-// ServicesListWithTechNews.tsx
-import React, { useState } from 'react';
-import { BarChart3 } from 'lucide-react';
-
-export function TechNewsSection({ service, refreshService }) {
-    const [techNews, setTechNews] = useState(service.techNews || []);
-    const [newTechTitle, setNewTechTitle] = useState('');
-    const [newTechValue, setNewTechValue] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    // Ajout d'une actualité technique
-    const handleAddTechNews = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        const res = await fetch('/api/technews', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                serviceId: service.id,
-                title: newTechTitle,
-                value: newTechValue
-            })
+    // Manage tech item (enable/disable)
+    async manageTechItem(serviceId: string, techItemName: string, enabled: boolean) {
+        const res = await apiClient.post<APIService>(`/services/${serviceId}/tech-items`, {
+            techItemName,
+            enabled
         });
-        if (res.ok) {
-            setNewTechTitle('');
-            setNewTechValue('');
-            refreshService(); // Pour recharger la liste depuis le parent
-        }
-        setLoading(false);
+        return res.data;
+    }
+
+
+
+
+    ----------------------------
+    import { useMutation, useQueryClient } from "@tanstack/react-query";
+    import apiDocumentationService from "../../services/api-documentation-service";
+
+    interface ManageTechItemParams {
+      serviceId: string;
+      techItemName: string;
+      enabled: boolean;
+    }
+
+    export const useManageTechItem = () => {
+      const queryClient = useQueryClient();
+
+      return useMutation({
+        mutationFn: ({ serviceId, techItemName, enabled }: ManageTechItemParams) =>
+          apiDocumentationService.manageTechItem(serviceId, techItemName, enabled),
+        onSuccess: (_data, variables) => {
+          // Invalidate the service query to refresh the data
+          queryClient.invalidateQueries({ queryKey: ['service', variables.serviceId] });
+          queryClient.invalidateQueries({ queryKey: ['services'] });
+        },
+      });
     };
 
-    // Désactivation/réactivation d'une actualité
-    const handleToggleTechNews = async (id, enabled) => {
-        setLoading(true);
-        await fetch(`/api/technews/${id}/toggle`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: !enabled })
-        });
-        refreshService();
-        setLoading(false);
-    };
 
-    return (
-        <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase text-neutral-500 tracking-wider flex items-center">
-                <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
-                TECH
-            </h4>
-            <div className="space-y-3">
-                {/* ... autres éléments techniques ... */}
-                <div className="mt-4">
-                    <h5 className="font-semibold text-sm mb-2">Actualités techniques</h5>
-                    <div className="max-h-32 overflow-y-auto space-y-2">
-                        {techNews.length === 0 && (
-                            <div className="text-xs text-neutral-400">Aucune actualité technique</div>
-                        )}
-                        {techNews.map(news => (
-                            <div
-                                key={news.id}
-                                className={`flex items-center justify-between px-3 py-2 rounded ${news.enabled ? 'bg-neutral-100' : 'bg-neutral-50 opacity-50'}`}
-                            >
-                                <span>
-                                    <strong>{news.title}:</strong> {news.value}
-                                </span>
-                                <button
-                                    className={`text-xs ${news.enabled ? 'text-red-500' : 'text-green-500'} hover:underline`}
-                                    onClick={e => { e.stopPropagation(); handleToggleTechNews(news.id, news.enabled); }}
-                                    disabled={loading}
-                                >
-                                    {news.enabled ? 'Désactiver' : 'Réactiver'}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    <form className="flex space-x-2 mt-2" onSubmit={handleAddTechNews}>
-                        <input
-                            type="text"
-                            placeholder="Titre"
-                            value={newTechTitle}
-                            onChange={e => setNewTechTitle(e.target.value)}
-                            className="border rounded px-2 py-1 text-xs"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Valeur"
-                            value={newTechValue}
-                            onChange={e => setNewTechValue(e.target.value)}
-                            className="border rounded px-2 py-1 text-xs"
-                            required
-                        />
-                        <button
-                            type="submit"
-                            className="bg-primary-500 text-white px-3 py-1 rounded text-xs"
-                            disabled={loading}
-                        >
-                            Ajouter
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// --- Utilisation dans la card service (exemple) ---
-// <TechNewsSection service={service} refreshService={...} />
-
-// Pour éviter que le filtre principal n'affecte les techNews :
-// - Les techNews sont récupérées et affichées pour chaque service indépendamment du filtre sur les services.
-// - Le composant parent doit recharger le service (et donc ses techNews) après chaque ajout/désactivation.
-
-// Pour garder la card compacte :
-// - La liste des actualités techniques est scrollable (max-h-32 overflow-y-auto).
-// - Le formulaire d'ajout est en ligne et minimaliste.
+--------------------------
+ServiceList :
+    const manageTechItem = useManageTechItem();
 
 
+    TechnicalInformatin :
 
 
+      {/* Technical information */}
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <h4 className="text-xs font-bold uppercase text-neutral-500 tracking-wider flex items-center">
+                                                    <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
+                                                    TECH
+                                                </h4>
+                                                <button
+                                                    className="text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Open modal to add new tech item
+                                                        if (typeof window !== 'undefined') {
+                                                            const techName = prompt("Entrez le nom du nouvel élément tech:");
+                                                            if (techName && techName.trim() !== "") {
+                                                                // Add the new tech item with enabled status
+                                                                manageTechItem.mutate({
+                                                                    serviceId: service.id,
+                                                                    techItemName: techName.trim().toLowerCase(),
+                                                                    enabled: true
+                                                                });
+                                                            }
+                                                        }
+                                                    }}
+                                                >
+                                                    + Ajouter
+                                                </button>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm font-medium text-neutral-700">Java 17</span>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className={`text-xs font-semibold ${service.java17Migrated ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {service.java17Migrated ? 'Migré' : 'Non migré'}
+                                                            </span>
+                                                            <button
+                                                                className="text-xs font-medium text-neutral-500 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    // Toggle the status
+                                                                    const newStatus = !service.java17Migrated;
+                                                                    manageTechItem.mutate({
+                                                                        serviceId: service.id,
+                                                                        techItemName: "java17",
+                                                                        enabled: newStatus
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {service.java17Migrated ? 'Désactiver' : 'Activer'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-neutral-100 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: service.java17Migrated ? '100%' : '0%' }}
+                                                            transition={{ duration: 1, ease: "easeOut" }}
+                                                            className={`h-full rounded-full bg-gradient-to-r ${service.java17Migrated ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600'}`}
+                                                        />
+                                                    </div>
+                                                </div>
 
-
-
-
-
-
-
-
-
------------
-<?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog
-    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
-    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
-
-    <changeSet id="2024-05-30-01-create-tech-news" author="ousmane">
-        <createTable tableName="tech_news">
-            <column name="id" type="UUID">
-                <constraints primaryKey="true" nullable="false"/>
-            </column>
-            <column name="title" type="VARCHAR(255)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="value" type="VARCHAR(255)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
-                <constraints nullable="false"/>
-            </column>
-            <column name="service_id" type="UUID"/>
-        </createTable>
-        <addForeignKeyConstraint
-            baseTableName="tech_news"
-            baseColumnNames="service_id"
-            constraintName="fk_technews_service"
-            referencedTableName="api_service"
-            referencedColumnNames="id"
-            onDelete="CASCADE"/>
-    </changeSet>
-</databaseChangeLog>
-
-
-
----------------------
-<?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog
-    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
-    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
-
-    <changeSet id="2024-05-30-02-add-technews-count-to-apiservice" author="ousmane">
-        <addColumn tableName="api_service">
-            <column name="tech_news_count" type="INT" defaultValueNumeric="0"/>
-        </addColumn>
-    </changeSet>
-</databaseChangeLog>
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm font-medium text-neutral-700">Sonarization</span>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className={`text-xs font-semibold ${service.sonarized ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {service.sonarized ? 'Sonarisé' : 'Non sonarisé'}
+                                                            </span>
+                                                            <button
+                                                                className="text-xs font-medium text-neutral-500 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    // Toggle the status
+                                                                    const newStatus = !service.sonarized;
+                                                                    manageTechItem.mutate({
+                                                                        serviceId: service.id,
+                                                                        techItemName: "sonarization",
+                                                                        enabled: newStatus
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {service.sonarized ? 'Désactiver' : 'Activer'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-neutral-100 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: service.sonarized ? '100%' : '0%' }}
+                                                            transition={{ duration: 1, ease: "easeOut" }}
+                                                            className={`h-full rounded-full bg-gradient-to-r ${service.sonarized ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600'}`}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
